@@ -1,0 +1,18 @@
+{
+  "name": "solid-if-iot-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@inrupt/solid-client": "^1.23.3",
+    "@inrupt/solid-client-authn-node": "^1.12.2",
+    "@inrupt/solid-client-notifications": "^1.1.1",
+    "dotenv": "^16.0.3"
+  }
+}
