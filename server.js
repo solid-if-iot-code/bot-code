@@ -13,7 +13,14 @@ const {
   getUrl,
   getStringNoLocale,
   createSolidDataset } = require('@inrupt/solid-client');
+const mqtt = require('mqtt');
+
 const session = new Session();
+
+function generateRandomId() {
+    return `mqtt_${Math.random().toString(16).slice(3)}`
+}
+
 session.login({
     clientId: process.env.clientId,
     clientSecret: process.env.clientSecret,
@@ -21,21 +28,16 @@ session.login({
 }).then(async () => {
     const webId = session.info.webId;
     const data = await getSolidDataset(webId, {fetch: session.fetch});
-    const graph = getThing(data, webId)
+    const graph = getThing(data, webId);
     const storage = getUrl(graph, 'http://www.w3.org/ns/pim/space#storage');
     const extendedProfileUri = getUrl(graph, 'http://www.w3.org/2000/01/rdf-schema#seeAlso');
-    //console.log(storage);
-    //console.log(extendedProfileUri);
     const extendedProfile = await getSolidDataset(extendedProfileUri, { fetch: session.fetch });
-    //console.log(extendedProfile);
     const extendedProfileWebIdThing = getThing(extendedProfile, webId);
-    // console.log(extendedProfileWebIdThing)
-    const sensorInboxUri = getStringNoLocale(extendedProfileWebIdThing, 'http://www.example.org/sensor#sensorInbox')
-    //console.log(sensorInboxUri);
+    const sensorInboxUri = getStringNoLocale(extendedProfileWebIdThing, 'http://www.example.org/sensor#sensorInbox');
     const fullSensorUri = `${storage}${sensorInboxUri}`;
     //const sensorData = await getSolidDataset(fullSensorUri, { fetch: session.fetch });
     //console.log(sensorData);
-    if (fullSensorUri) {
+    /**if (fullSensorUri) {
         const ws = new WebsocketNotification(
             fullSensorUri,
             { fetch: session.fetch }
@@ -56,6 +58,34 @@ session.login({
         ws.on("message", (notif) => {
             console.log(notif);
         })
-    }
-    
+    }*/
+    const id = generateRandomId();
+    const url = ''
+    const publishTopic = ''
+    const subscribeTopic = ''
+    const client = mqtt.connect(url, {
+        id,
+        clean: true,
+        connectTimeout: 5000,
+    })
+
+    client.subscribe([subscribeTopic], () => {
+        console.log(`client subscribed to ${subscribeTopic}}`)
+    })
+
+    client.on('connect', () => {
+        console.log('client connected!')
+    })
+
+    client.on('message', (topic, payload, packet) => {
+        console.log(`received ${topic} with data: ${payload.toString()}`)
+    })
+
+    client.on('error', (err) => { 
+        console.log(err)
+    })
+    const msg = 'some message'
+    client.publish(publishTopic, msg, () => {
+        console.log(`published ${msg}`)
+    })
 }).catch((err) => console.log(err));
