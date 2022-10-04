@@ -60,9 +60,9 @@ session.login({
         })
     }*/
     const id = generateRandomId();
-    const url = ''
-    const publishTopic = ''
-    const subscribeTopic = ''
+    const url = 'mqtt://broker.hivemq.com/'
+    const publishTopic = 'uark/csce5013/test'
+    const subscribeTopic = 'uark/csce5013/ahnelson/light'
     const client = mqtt.connect(url, {
         id,
         clean: true,
@@ -70,7 +70,7 @@ session.login({
     })
 
     client.subscribe([subscribeTopic], () => {
-        console.log(`client subscribed to ${subscribeTopic}}`)
+        console.log(`client subscribed to ${subscribeTopic}`)
     })
 
     client.on('connect', () => {
@@ -84,7 +84,7 @@ session.login({
     client.on('error', (err) => { 
         console.log(err)
     })
-    const msg = 'some message'
+    const msg = '79'
     client.publish(publishTopic, msg, () => {
         console.log(`published ${msg}`)
     })
