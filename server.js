@@ -13,7 +13,9 @@ const {
   getUrl,
   getStringNoLocale,
   createSolidDataset,
-getThingAll } = require('@inrupt/solid-client');
+getThingAll, 
+getIri,
+universalAccess } = require('@inrupt/solid-client');
 const mqtt = require('mqtt');
 
 const session = new Session();
@@ -30,25 +32,64 @@ session.login({
     const webId = session.info.webId;
     const data = await getSolidDataset(webId, {fetch: session.fetch});
     const graph = getThing(data, webId);
-    //const storage = getUrl(graph, 'http://www.w3.org/ns/pim/space#storage');
+    const storageUri = getUrl(graph, 'http://www.w3.org/ns/pim/space#storage');
+    const sensorContactsUri = `${storageUri}contacts/sensorContacts`;
+    let sensorContactsDataset = await getSolidDataset(sensorContactsUri, {fetch: session.fetch});
+    const sensorContacts = getThingAll(sensorContactsDataset);
+    let sensorContactsIds = sensorContacts.map(thing => getIri(thing, 'https://www.exampe.com/contact#webId'))
+    console.log(sensorContactsIds);
+    
+    
     const extendedProfileUri = getUrl(graph, 'http://www.w3.org/2000/01/rdf-schema#seeAlso');
     const extendedProfile = await getSolidDataset(extendedProfileUri, { fetch: session.fetch });
     const extendedProfileWebIdThing = getThing(extendedProfile, webId);
     const sensorInboxUri = getStringNoLocale(extendedProfileWebIdThing, 'http://www.example.org/sensor#sensorInbox');
     console.log(sensorInboxUri);
-    //const fullSensorUri = `${storage}${sensorInboxUri}`;
-    //const sensorData = await getSolidDataset(fullSensorUri, { fetch: session.fetch });
-    //console.log(sensorData);
+    
     let cache = [];
     let socketListeners = {};
+    if (sensorContactsIds.length > 0) {
+        const ws = new WebsocketNotification(
+            sensorContactsUri,
+            { fetch: session.fetch}
+        )
+        ws.on("error", (error) => {
+            console.log(error)
+        })
+        ws.on("closed", () => {
+            console.log('contacts websocket closed!')
+        })
+        ws.on("connected", () => {
+            console.log('listening to contacts dataset!')
+        })
+        ws.on("message", async (notification) => {
+            console.log(notification)
+            sensorContactsDataset = await getSolidDataset(sensorContactsUri, {fetch: session.fetch});
+            let newSensorContacts = getThingAll(sensorContactsDataset);
+            let newContactsIds = newSensorContacts.map(thing => getIri(thing, 'https://www.exampe.com/contact#webId'))
+            let newWebId = newContactsIds.filter(webId => !sensorContactsIds.includes(webId));
+            for (const cUrl of cache) {
+                try {
+                    await universalAccess.setAgentAccess(cUrl, newWebId, { fetch: session.fetch});
+                    console.log(`access to ${cUrl} given to ${newWebId}`);
+                } catch (err) {
+                    console.log(err);
+                }
+            }
+            sensorContactsIds = newContactsIds;
+        })
+        ws.connect();
+    }
+    
     if (sensorInboxUri) {
+        
         let dataset = await getSolidDataset(sensorInboxUri, { fetch: session.fetch });
         console.log(sensorInboxUri)
         const ws = new WebsocketNotification(
             sensorInboxUri,
             { fetch: session.fetch }
         )
-    
+        
         ws.on("error", (error) => {
             console.log(error);
         })
@@ -74,6 +115,8 @@ session.login({
             let newThing = newThings.filter(url => !cache.includes(url));
             cache = newThings;
             const newUrl = newThing[0];
+            //i need to also check to see if the sensor is subscribed to or not
+            //can i do that somewhere down here somehow?
             const wss = new WebsocketNotification(
                 newUrl,
                 { fetch: session.fetch }
@@ -102,10 +145,11 @@ session.login({
 
         ws.connect();
     }
-    /**const id = generateRandomId();
-    const url = 'mqtt://broker.hivemq.com/'
-    const publishTopic = 'uark/csce5013/test'
-    const subscribeTopic = 'uark/csce5013/ahnelson/light'
+
+
+    const id = generateRandomId();
+    //const url = 'mqtt://broker.hivemq.com/'
+    //const subscribeTopic = 'uark/csce5013/ahnelson/light'
     const client = mqtt.connect(url, {
         id,
         clean: true,
@@ -122,19 +166,11 @@ session.login({
 
     client.on('message', (topic, payload, packet) => {
         console.log(`received ${topic} with data: ${payload.toString()}`)
+        //have to write to data on certain messages and subscribed topics
     })
 
     client.on('error', (err) => { 
         console.log(err)
     })
-    const msg = '79'
-    client.publish(publishTopic, msg, () => {
-        console.log(`published ${msg}`)
-    })**/
-}).catch((err) => console.log(err));
-
-function createWebsocket(session, url) {
     
-
-    return ws;
-}
+}).catch((err) => console.log(err));
