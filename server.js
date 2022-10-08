@@ -68,19 +68,24 @@ session.login({
             let newSensorContacts = getThingAll(sensorContactsDataset);
             let newContactsIds = newSensorContacts.map(thing => getIri(thing, 'https://www.exampe.com/contact#webId'))
             let newWebId = newContactsIds.filter(webId => !sensorContactsIds.includes(webId));
-            for (const cUrl of cache) {
-                try {
-                    await universalAccess.setAgentAccess(cUrl, newWebId, { fetch: session.fetch});
-                    console.log(`access to ${cUrl} given to ${newWebId}`);
-                } catch (err) {
-                    console.log(err);
+            if (cache.length > 0) {
+                for (const cUrl of cache) {
+                    try {
+                        await universalAccess.setAgentAccess(cUrl, newWebId, { fetch: session.fetch});
+                        console.log(`access to ${cUrl} given to ${newWebId}`);
+                    } catch (err) {
+                        console.log(err);
+                    }
                 }
+            } else {
+                console.log('nothing in the cache rn')
             }
+            
             sensorContactsIds = newContactsIds;
         })
         ws.connect();
     }
-    
+    /** 
     if (sensorInboxUri) {
         
         let dataset = await getSolidDataset(sensorInboxUri, { fetch: session.fetch });
@@ -172,5 +177,5 @@ session.login({
     client.on('error', (err) => { 
         console.log(err)
     })
-    
+    */    
 }).catch((err) => console.log(err));
