@@ -74,6 +74,11 @@ session.login({
 
     sensorContactsSocket.on("message", async (notif) => {
         console.log(`sensor contacts socket: ${notif}`);
+        // get a new cache from the resource
+        // compare the old cache of webids to the new cache
+        // if the new cache is longer, filter those webids
+        // for each webId that is new, set their agent access to read for each sensor name 
+        //    in the sensor container
     })
 
     sensorContactsSocket.connect();
@@ -97,6 +102,11 @@ session.login({
 
     sensorContainerSocket.on("message", async (notif) => {
         console.log(`sensor container socket: ${notif}`);
+        // get a new cache from the resource
+        // compared the old cache of sensor names to the new cache
+        // if the new cache is longer, filter those new sensor uris
+        // for each new sensor uri, set their agent access to read for each webid
+        //    in the sensor contacts cache
     })
 
     sensorContainerSocket.connect();
@@ -121,6 +131,16 @@ session.login({
 
     subscribedTopicsSocket.on("message", async (notif) => {
         console.log(`subscribed topics socket: ${notif}`);
+        // get a new cache of subscribed topics from the resource
+        // if it is shorter
+        //    filter the old topics
+        //    send a client.unsubscribe to the broker
+        //    save the remaining dataset to the resource
+        // if it is longer
+        //    find the new topics
+        //    send a client.subscribe to the broker
+        //    save the messages to a new resource at storageUri/public/topic-name
+        // save the new cahce over the old cache
     })
 
     subscribedTopicsSocket.connect();
