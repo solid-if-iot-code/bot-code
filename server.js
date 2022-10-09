@@ -24,30 +24,135 @@ function generateRandomId() {
     return `mqtt_${Math.random().toString(16).slice(3)}`
 }
 
+//authenticate
 session.login({
     clientId: process.env.clientId,
     clientSecret: process.env.clientSecret,
     oidcIssuer: process.env.oidcIssuer,
 }).then(async () => {
+    // get storage uri
     const webId = session.info.webId;
     const data = await getSolidDataset(webId, {fetch: session.fetch});
     const graph = getThing(data, webId);
     const storageUri = getUrl(graph, 'http://www.w3.org/ns/pim/space#storage');
+
+    // get contact ids dataset
     const sensorContactsUri = `${storageUri}contacts/sensorContacts`;
     let sensorContactsDataset = await getSolidDataset(sensorContactsUri, {fetch: session.fetch});
     const sensorContacts = getThingAll(sensorContactsDataset);
-    let sensorContactsIds = sensorContacts.map(thing => getIri(thing, 'https://www.exampe.com/contact#webId'))
-    console.log(sensorContactsIds);
+    let sensorContactsCache = sensorContacts.map(thing => getIri(thing, 'https://www.exampe.com/contact#webId'))
     
-    
+    //get sensor container resource (SCR)
     const extendedProfileUri = getUrl(graph, 'http://www.w3.org/2000/01/rdf-schema#seeAlso');
     const extendedProfile = await getSolidDataset(extendedProfileUri, { fetch: session.fetch });
     const extendedProfileWebIdThing = getThing(extendedProfile, webId);
-    const sensorInboxUri = getStringNoLocale(extendedProfileWebIdThing, 'http://www.example.org/sensor#sensorInbox');
-    console.log(sensorInboxUri);
+    const sensorContainerResource = getStringNoLocale(extendedProfileWebIdThing, 'http://www.example.org/sensor#sensorInbox');
     
-    let cache = [];
-    let socketListeners = {};
+    //get subscribedTopics resource
+    const subscribedTopicsUri = `${storageUri}public/subscribedTopics`
+    const subscribedTopicsDataset = await getSolidDataset(subscribedTopicsUri)
+    const subscribedTopicsThings = getThingAll(subscribedTopicsDataset);
+    const subscribedTopicsCache = subscribedTopicsThings.map(thing => getStringNoLocale(thing, 'http://www.example.org/identifier#fullTopicString').split('+'))
+    //console.log(subscribedTopicsCache);
+    
+    const sensorContactsSocket = new WebsocketNotification(
+        sensorContactsUri,
+        { fetch: session.fetch }
+    )
+    
+    sensorContactsSocket.on("error", (error) => {
+        console.log(error.message);
+    })
+
+    sensorContactsSocket.on("connected", () => {
+        console.log('connected sensor contacts socket!')
+    })
+
+    sensorContactsSocket.on("closed", () => {
+        console.log('closed sensor contacts socket!')
+    });
+
+    sensorContactsSocket.on("message", async (notif) => {
+        console.log(`sensor contacts socket: ${notif}`);
+    })
+
+    sensorContactsSocket.connect();
+
+    const sensorContainerSocket = new WebsocketNotification(
+        sensorContainerResource,
+        { fetch: session.fetch }
+    )
+    
+    sensorContainerSocket.on("error", (error) => {
+        console.log(error.message);
+    })
+
+    sensorContainerSocket.on("connected", () => {
+        console.log('connected sensor container socket!')
+    })
+
+    sensorContainerSocket.on("closed", () => {
+        console.log('closed sensor container socket!')
+    });
+
+    sensorContainerSocket.on("message", async (notif) => {
+        console.log(`sensor container socket: ${notif}`);
+    })
+
+    sensorContainerSocket.connect();
+    
+
+    const subscribedTopicsSocket = new WebsocketNotification(
+        subscribedTopicsUri,
+        { fetch: session.fetch }
+    )
+    
+    subscribedTopicsSocket.on("error", (error) => {
+        console.log(error.message);
+    })
+
+    subscribedTopicsSocket.on("connected", () => {
+        console.log('connected subscribed topics socket!')
+    })
+
+    subscribedTopicsSocket.on("closed", () => {
+        console.log('closed subscribed topics socket!')
+    });
+
+    subscribedTopicsSocket.on("message", async (notif) => {
+        console.log(`subscribed topics socket: ${notif}`);
+    })
+
+    subscribedTopicsSocket.connect();
+    
+
+    //establish mqtt client
+    const id = generateRandomId();
+    const url = 'mqtt://broker.hivemq.com/'
+    const client = mqtt.connect(url, {
+        id,
+        clean: true,
+        connectTimeout: 5000,
+    })
+
+    //client.subscribe([subscribeTopic], () => {
+    //    console.log(`client subscribed to ${subscribeTopic}`)
+    //})
+
+    client.on('connect', () => {
+        console.log('client connected!')
+    })
+
+    client.on('message', (topic, payload, packet) => {
+        console.log(`received ${topic} with data: ${payload.toString()}`)
+        //have to write to data on certain messages and subscribed topics
+    })
+
+    client.on('error', (err) => { 
+        console.log(err)
+    })
+       
+
     if (sensorContactsIds.length > 0) {
         const ws = new WebsocketNotification(
             sensorContactsUri,
@@ -151,31 +256,5 @@ session.login({
         ws.connect();
     }
 
-
-    const id = generateRandomId();
-    //const url = 'mqtt://broker.hivemq.com/'
-    //const subscribeTopic = 'uark/csce5013/ahnelson/light'
-    const client = mqtt.connect(url, {
-        id,
-        clean: true,
-        connectTimeout: 5000,
-    })
-
-    client.subscribe([subscribeTopic], () => {
-        console.log(`client subscribed to ${subscribeTopic}`)
-    })
-
-    client.on('connect', () => {
-        console.log('client connected!')
-    })
-
-    client.on('message', (topic, payload, packet) => {
-        console.log(`received ${topic} with data: ${payload.toString()}`)
-        //have to write to data on certain messages and subscribed topics
-    })
-
-    client.on('error', (err) => { 
-        console.log(err)
-    })
-    */    
+*/
 }).catch((err) => console.log(err));
