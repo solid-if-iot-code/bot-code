@@ -176,25 +176,43 @@ session.login({
             // filter the old topics
             const topicsToUnsubscribe = subscribedTopicsThings.filter(thing => !newSubscribedTopicsThings.includes(thing))
             // find the appropriate mqtt client from mqttClientCache using broker uri
-            let targetMqttClient = mqtt.connect({url})
-            // send a client.unsubscribe to the broker
-            targetMqttClient.unsubscribe(topicsToUnsubscribe, {}, (err, packet) => {
-                if (err) console.log(err);
-                console.log(`unsubscribed: ${packet}`)
-                // save the remaining dataset to the resource
-            })
+            for (const sTopic of topicsToUnsubscribe) {
+                let s = getStringNoLocale(sTopic, "https://www.example.org/identifier#fullTopicString").split('+');
+                let brokerUri = s[0];
+                let topic = s[1];
+                if (mqttClientCache[brokerUri]) {
+                    mqttClientCache[brokerUri].unsubscribe([topic], {}, (err, packet) => {
+                        if (err) console.log(err);
+                        console.log(packet)
+                    })
+                } else {
+                    console.log('error: wasn\'t subscribed to this topic in the first place somehow')
+                }
+            }
         } 
         // if it is longer
         else if (newSubscribedTopicsThings.length > subscribedTopicsThings.length) {
             // filter the new topics
             const topicsToSubscribe = newSubscribedTopicsThings.filter(thing => !subscribedTopicsThings.includes(thing))
-            let targetMqttClient = mqtt.connect({url})
-            // send a client.subscribe to the broker
-            targetMqttClient.subscribe(topicsToSubscribe, {}, (err, packet) => {
-                if (err) console.log(err);
-                console.log(`subscribed: ${packet}`)
-                // save the remaining dataset to the resource
-            })
+            for (const sTopic of topicsToSubscribe) {
+                let s = getStringNoLocale(sTopic, "https://www.example.org/identifier#fullTopicString").split('+');
+                let brokerUri = s[0];
+                let topic = s[1];
+                if (mqttClientCache[brokerUri]) {
+                    mqttClientCache[brokerUri].subscribe([topic], {}, (err, packet) => {
+                        if (err) console.log(err);
+                        console.log(packet)
+                    })
+                } else {
+                    let targetMqttClient = mqtt.connect(url);
+                    targetMqttClient.subscribe([topic], {}, (err, packet) => {
+                        if (err) console.log(err);
+                        console.log(packet)
+                    })
+                    mqttClientCache[brokerUri] = targetMqttClient;
+                }
+            }
+            
         } else {
             return;
         }
