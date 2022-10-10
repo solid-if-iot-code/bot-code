@@ -61,10 +61,11 @@ session.login({
 
     // get subscribedTopics resource
     const subscribedTopicsUri = `${storageUri}public/subscribedTopics`
-    const subscribedTopicsDataset = await getSolidDataset(subscribedTopicsUri)
-    const subscribedTopicsThings = getThingAll(subscribedTopicsDataset);
-    const subscribedTopicsCache = subscribedTopicsThings.map(thing => getStringNoLocale(thing, 'http://www.example.org/identifier#fullTopicString').split('+'))
-    // console.log(subscribedTopicsCache);
+    const subscribedTopicsDataset = await getSolidDataset(subscribedTopicsUri, { fetch: session.fetch });
+    let subscribedTopicsThings = getThingAll(subscribedTopicsDataset);
+    //console.log(subscribedTopicsThings)
+    let subscribedTopicsCache = subscribedTopicsThings.map(thing => getStringNoLocale(thing, 'http://www.example.org/identifier#fullTopicString'))
+    console.log(subscribedTopicsCache);
     // keep track of all the broker uris initiated for each Mqtt Client
     let mqttClientCache = []
     const sensorContactsSocket = new WebsocketNotification(
@@ -167,21 +168,29 @@ session.login({
     });
 
     subscribedTopicsSocket.on("message", async (notif) => {
-        console.log(`subscribed topics socket: ${notif}`);
+        //console.log(`subscribed topics socket: ${notif}`);
         // get a new cache of subscribed topics from the resource
-        const newSubscribedTopicsDataset = await getSolidDataset(subscribedTopicsUri)
+        const newSubscribedTopicsDataset = await getSolidDataset(subscribedTopicsUri, { fetch: session.fetch})
         const newSubscribedTopicsThings = getThingAll(newSubscribedTopicsDataset);
+        const newSubscribedTopicsCache = newSubscribedTopicsThings.map((t) => getStringNoLocale(t, "https://www.example.org/identifier#fullTopicString"));
+        console.log(newSubscribedTopicsCache);
+        console.log(newSubscribedTopicsCache.length);
+        console.log(subscribedTopicsCache.length);
         // if it is shorter
-        if (newSubscribedTopicsThings.length < subscribedTopicsThings.length) {
+        if (newSubscribedTopicsCache.length < subscribedTopicsCache.length) {
+             console.log('time to unsubscribe')
             // filter the old topics
-            const topicsToUnsubscribe = subscribedTopicsThings.filter(thing => !newSubscribedTopicsThings.includes(thing))
+            const topicsToUnsubscribe = subscribedTopicsCache.filter(s => !newSubscribedTopicsCache.includes(s))
+            console.log(`unsubscribed topics: ${topicsToUnsubscribe}`)
             // find the appropriate mqtt client from mqttClientCache using broker uri
-            for (const sTopic of topicsToUnsubscribe) {
-                let s = getStringNoLocale(sTopic, "https://www.example.org/identifier#fullTopicString").split('+');
+            for (const str of topicsToUnsubscribe) {
+                let s = str.split('+');
                 let brokerUri = s[0];
+                console.log(`broker ${brokerUri}`)
                 let topic = s[1];
-                if (mqttClientCache[brokerUri]) {
-                    mqttClientCache[brokerUri].unsubscribe([topic], {}, (err, packet) => {
+                console.log(`topic to unsubscribe: ${topic}`)
+                if (mqttClientCache[str]) {
+                    mqttClientCache[str].unsubscribe(topic, {}, (err, packet) => {
                         if (err) console.log(err);
                         console.log(packet)
                     })
@@ -189,64 +198,50 @@ session.login({
                     console.log('error: wasn\'t subscribed to this topic in the first place somehow')
                 }
             }
+            subscribedTopicsCache = subscribedTopicsCache.filter(t => !topicsToUnsubscribe.includes(t))
+            console.log(`subscribed topics: ${subscribedTopicsCache}`)
         } 
         // if it is longer
-        else if (newSubscribedTopicsThings.length > subscribedTopicsThings.length) {
+        else if (newSubscribedTopicsCache.length > subscribedTopicsCache.length) {
             // filter the new topics
-            const topicsToSubscribe = newSubscribedTopicsThings.filter(thing => !subscribedTopicsThings.includes(thing))
-            for (const sTopic of topicsToSubscribe) {
-                let s = getStringNoLocale(sTopic, "https://www.example.org/identifier#fullTopicString").split('+');
+            console.log('time to subscribe')
+            const topicsToSubscribe = newSubscribedTopicsCache.filter(s => !subscribedTopicsCache.includes(s))
+            console.log(topicsToSubscribe)
+            for (const st of topicsToSubscribe) {
+                let s = st.split('+');
                 let brokerUri = s[0];
+                console.log(`broker: ${brokerUri}`)
                 let topic = s[1];
-                if (mqttClientCache[brokerUri]) {
-                    mqttClientCache[brokerUri].subscribe([topic], {}, (err, packet) => {
+                console.log(`topic: ${topic}`)
+                console.log(mqttClientCache[st])
+                if (mqttClientCache[st]) {
+                    
+                    mqttClientCache[st].subscribe(topic, {}, (err, packet) => {
                         if (err) console.log(err);
                         console.log(packet)
+                    })
+                    mqttClientCache[st].on('message', (topic, payload, packet) => {
+                        console.log(`received ${topic} with data: ${payload.toString()}`)
                     })
                 } else {
-                    let targetMqttClient = mqtt.connect(url);
-                    targetMqttClient.subscribe([topic], {}, (err, packet) => {
+                    let targetMqttClient = mqtt.connect(brokerUri);
+                    targetMqttClient.subscribe(topic, {}, (err, packet) => {
                         if (err) console.log(err);
                         console.log(packet)
                     })
-                    mqttClientCache[brokerUri] = targetMqttClient;
+                    targetMqttClient.on('message', (topic, payload, packet) => {
+                        console.log(`received ${topic} with data: ${payload.toString()}`)
+                    })
+                    mqttClientCache[st] = targetMqttClient;
                 }
             }
-            
+            subscribedTopicsCache = newSubscribedTopicsCache;
+            console.log(`new subscribed topics: ${subscribedTopicsCache}`)  
         } else {
             return;
         }
+        
     })
-
     subscribedTopicsSocket.connect();
-    
-
-    //establish mqtt client
-    const id = generateRandomId();
-    const url = 'mqtt://broker.hivemq.com/'
-    const client = mqtt.connect(url, {
-        id,
-        clean: true,
-        connectTimeout: 5000,
-    })
-
-    //client.subscribe([subscribeTopic], () => {
-    //    console.log(`client subscribed to ${subscribeTopic}`)
-    //})
-
-    client.on('connect', () => {
-        console.log('client connected!')
-    })
-
-    client.on('message', (topic, payload, packet) => {
-        console.log(`received ${topic} with data: ${payload.toString()}`)
-        //have to write to data on certain messages and subscribed topics
-    })
-
-    client.on('error', (err) => { 
-        console.log(err)
-    })
-       
-
     
 }).catch((err) => console.log(err));
