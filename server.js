@@ -169,15 +169,35 @@ session.login({
     subscribedTopicsSocket.on("message", async (notif) => {
         console.log(`subscribed topics socket: ${notif}`);
         // get a new cache of subscribed topics from the resource
+        const newSubscribedTopicsDataset = await getSolidDataset(subscribedTopicsUri)
+        const newSubscribedTopicsThings = getThingAll(newSubscribedTopicsDataset);
         // if it is shorter
-        //    filter the old topics
-        //    send a client.unsubscribe to the broker
-        //    save the remaining dataset to the resource
+        if (newSubscribedTopicsThings.length < subscribedTopicsThings.length) {
+            // filter the old topics
+            const topicsToUnsubscribe = subscribedTopicsThings.filter(thing => !newSubscribedTopicsThings.includes(thing))
+            // find the appropriate mqtt client from mqttClientCache using broker uri
+            let targetMqttClient = mqtt.connect({url})
+            // send a client.unsubscribe to the broker
+            targetMqttClient.unsubscribe(topicsToUnsubscribe, {}, (err, packet) => {
+                if (err) console.log(err);
+                console.log(`unsubscribed: ${packet}`)
+                // save the remaining dataset to the resource
+            })
+        } 
         // if it is longer
-        //    find the new topics
-        //    send a client.subscribe to the broker
-        //    save the messages to a new resource at storageUri/public/topic-name
-        // save the new cahce over the old cache
+        else if (newSubscribedTopicsThings.length > subscribedTopicsThings.length) {
+            // filter the new topics
+            const topicsToSubscribe = newSubscribedTopicsThings.filter(thing => !subscribedTopicsThings.includes(thing))
+            let targetMqttClient = mqtt.connect({url})
+            // send a client.subscribe to the broker
+            targetMqttClient.subscribe(topicsToSubscribe, {}, (err, packet) => {
+                if (err) console.log(err);
+                console.log(`subscribed: ${packet}`)
+                // save the remaining dataset to the resource
+            })
+        } else {
+            return;
+        }
     })
 
     subscribedTopicsSocket.connect();
