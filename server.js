@@ -36,7 +36,25 @@ session.login({
     const data = await getSolidDataset(webId, {fetch: session.fetch});
     const graph = getThing(data, webId);
     const storageUri = getUrl(graph, 'http://www.w3.org/ns/pim/space#storage');
-
+    // initialize test dataset
+    const testDataUri = `${storageUri}/mqttdata/testdata`
+    let mqttData;
+    try {
+        mqttData = await getSolidDataset(testDataUri, { fetch: session.fetch })
+    } catch (err) {
+        console.log(err);
+        let newDataset = createSolidDataset();
+        try {
+            mqttData = await saveSolidDatasetAt(testDataUri, newDataset, { fetch: session.fetch })
+        } catch (err) {
+            throw new Error(err.message)
+        }
+    }
+    // set interval to save data to resource
+    setInterval(async () => {
+        console.log('saving data...')
+        mqttData = await saveSolidDatasetAt(testDataUri, mqttData, { fetch: session.fetch });
+    }, 60000)
     // get contact ids dataset
     const sensorContactsUri = `${storageUri}contacts/sensorContacts`;
     let sensorContactsDataset = await getSolidDataset(sensorContactsUri, {fetch: session.fetch});
@@ -76,7 +94,12 @@ session.login({
                     console.log(packet)
                 })
                 mqttClientCache[st].on('message', (topic, payload, packet) => {
-                    console.log(`received ${topic} with data: ${payload.toString()} or bytes: ${payload.toString().hexEncode().hexDecode()}`)
+                    //console.log(`received ${topic} with data: ${payload.toString()} or bytes: ${payload.toString().hexEncode().hexDecode()}`)
+                    let newThing = buildThing(createThing())
+                      .addStringNoLocale("https://www.example.org/mqtt#topic", topic)
+                      .addStringNoLocale("https://www.example.org/mqtt#payload", payload.toString())
+                      .build()
+                    mqttData = setThing(mqttData, newThing)
                 })
             }
         }
@@ -237,7 +260,7 @@ session.login({
                         console.log(packet)
                     })
                     mqttClientCache[st].on('message', (topic, payload, packet) => {
-                        console.log(`received ${topic} with data: ${payload.toString()} or bytes: ${payload.toString().hexEncode().hexDecode()}`)
+                        console.log(`received ${topic} with data: ${payload.toString()}`)
                     })
                 } else {
                     let targetMqttClient = mqtt.connect(brokerUri);
