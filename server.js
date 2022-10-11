@@ -18,6 +18,7 @@ getIri,
 universalAccess, 
 getContainedResourceUrlAll} = require('@inrupt/solid-client');
 const mqtt = require('mqtt');
+const hex = require('string-hex')
 
 const session = new Session();
 
@@ -66,6 +67,24 @@ session.login({
     //console.log(subscribedTopicsThings)
     let subscribedTopicsCache = subscribedTopicsThings.map(thing => getStringNoLocale(thing, 'http://www.example.org/identifier#fullTopicString'))
     console.log(subscribedTopicsCache);
+    for (const st of subscribedTopicsCache) {
+        let s = st.split('+');
+        let brokerUri = s[0];
+        console.log(`broker: ${brokerUri}`)
+        let topic = s[1];
+        console.log(`topic: ${topic}`)
+        console.log(mqttClientCache[st])
+        if (mqttClientCache[st]) {
+            
+            mqttClientCache[st].subscribe(topic, {}, (err, packet) => {
+                if (err) console.log(err);
+                console.log(packet)
+            })
+            mqttClientCache[st].on('message', (topic, payload, packet) => {
+                console.log(`received ${topic} with data: ${payload.toString()} or bytes: ${payload.toString().hexEncode().hexDecode()}`)
+            })
+        }
+    }
     // keep track of all the broker uris initiated for each Mqtt Client
     let mqttClientCache = []
     const sensorContactsSocket = new WebsocketNotification(
@@ -221,7 +240,7 @@ session.login({
                         console.log(packet)
                     })
                     mqttClientCache[st].on('message', (topic, payload, packet) => {
-                        console.log(`received ${topic} with data: ${payload.toString()}`)
+                        console.log(`received ${topic} with data: ${payload.toString()} or bytes: ${payload.toString().hexEncode().hexDecode()}`)
                     })
                 } else {
                     let targetMqttClient = mqtt.connect(brokerUri);
@@ -230,7 +249,7 @@ session.login({
                         console.log(packet)
                     })
                     targetMqttClient.on('message', (topic, payload, packet) => {
-                        console.log(`received ${topic} with data: ${payload.toString()}`)
+                        console.log(`received ${topic} with data: ${payload.toString().hexEncode().hexDecode()}`)
                     })
                     mqttClientCache[st] = targetMqttClient;
                 }
