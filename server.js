@@ -18,12 +18,8 @@ getIri,
 universalAccess, 
 getContainedResourceUrlAll} = require('@inrupt/solid-client');
 const mqtt = require('mqtt');
-
+const { FOAF } = require('@inrupt/vocab-common-rdf');
 const session = new Session();
-
-function generateRandomId() {
-    return `mqtt_${Math.random().toString(16).slice(3)}`
-}
 
 //authenticate
 session.login({
@@ -37,7 +33,7 @@ session.login({
     const graph = getThing(data, webId);
     const storageUri = getUrl(graph, 'http://www.w3.org/ns/pim/space#storage');
     // initialize test dataset
-    const testDataUri = `${storageUri}/mqttdata/testdata`
+    const testDataUri = `${storageUri}mqttdata/testdata`
     let mqttData;
     try {
         mqttData = await getSolidDataset(testDataUri, { fetch: session.fetch })
@@ -62,10 +58,10 @@ session.login({
     let sensorContactsCache = sensorContacts.map(thing => getIri(thing, 'https://www.example.com/contact#webId'))
     
     //get sensor container resource (SCR)
-    const extendedProfileUri = getUrl(graph, 'http://www.w3.org/2000/01/rdf-schema#seeAlso');
-    const extendedProfile = await getSolidDataset(extendedProfileUri, { fetch: session.fetch });
-    const extendedProfileWebIdThing = getThing(extendedProfile, webId);
-    const sensorContainerResourceUri = getStringNoLocale(extendedProfileWebIdThing, 'http://www.example.org/sensor#sensorInbox');
+    const profileUri = getUrl(graph, FOAF.isPrimaryTopicOf);
+    const profile = await getSolidDataset(profileUri, { fetch: session.fetch });
+    const profileWebIdThing = getThing(profile, webId);
+    const sensorContainerResourceUri = getStringNoLocale(profileWebIdThing, 'http://www.example.org/sensor#sensorInbox');
     // then get all the sensor resources
     let sensorContainerResourceDataset = await getSolidDataset(sensorContainerResourceUri, { fetch: session.fetch });
     let containedSensorResourceUris = getContainedResourceUrlAll(sensorContainerResourceDataset)
@@ -76,9 +72,10 @@ session.login({
     const subscribedTopicsUri = `${storageUri}public/subscribedTopics`
     const subscribedTopicsDataset = await getSolidDataset(subscribedTopicsUri, { fetch: session.fetch });
     let subscribedTopicsThings = getThingAll(subscribedTopicsDataset);
-    //console.log(subscribedTopicsThings)
-    let subscribedTopicsCache = subscribedTopicsThings.map(thing => getStringNoLocale(thing, 'http://www.example.org/identifier#fullTopicString'))
+    console.log(subscribedTopicsThings)
+    let subscribedTopicsCache = subscribedTopicsThings.map(thing => getStringNoLocale(thing, 'https://www.example.org/identifier#fullTopicString'))
     console.log(subscribedTopicsCache);
+    
     if (subscribedTopicsCache.length > 0) { 
         for (const st of subscribedTopicsCache) {
             let s = st.split('+');
@@ -86,25 +83,24 @@ session.login({
             console.log(`broker: ${brokerUri}`)
             let topic = s[1];
             console.log(`topic: ${topic}`)
-            console.log(mqttClientCache[st])
-            if (mqttClientCache[st]) {
-                
-                mqttClientCache[st].subscribe(topic, {}, (err, packet) => {
-                    if (err) console.log(err);
-                    console.log(packet)
-                })
-                mqttClientCache[st].on('message', (topic, payload, packet) => {
-                    //console.log(`received ${topic} with data: ${payload.toString()} or bytes: ${payload.toString().hexEncode().hexDecode()}`)
-                    let newThing = buildThing(createThing())
-                      .addStringNoLocale("https://www.example.org/mqtt#topic", topic)
-                      .addStringNoLocale("https://www.example.org/mqtt#payload", payload.toString())
-                      .build()
-                    mqttData = setThing(mqttData, newThing)
-                })
-            }
+            let targetMqttClient = mqtt.connect(brokerUri);
+            targetMqttClient.subscribe(topic, {}, (err, packet) => {
+                if (err) console.log(err);
+                console.log(packet)
+            })
+            targetMqttClient.on('message', (topic, payload, packet) => {
+                console.log(`received ${topic} with data: ${payload.toString()}`)
+                let newThing = buildThing(createThing())
+                .addStringNoLocale("https://www.example.org/mqtt#topic", topic)
+                .addStringNoLocale("https://www.example.org/mqtt#payload", payload.toString())
+                .build()
+            mqttData = setThing(mqttData, newThing)
+            })
+            mqttClientCache[st] = targetMqttClient;
+            
         }
      }
-   
+    
     // keep track of all the broker uris initiated for each Mqtt Client
     
     const sensorContactsSocket = new WebsocketNotification(
@@ -269,7 +265,7 @@ session.login({
                         console.log(packet)
                     })
                     targetMqttClient.on('message', (topic, payload, packet) => {
-                        console.log(`received ${topic} with data: ${payload.toString().hexEncode().hexDecode()}`)
+                        console.log(`received ${topic} with data: ${payload.toString()}`)
                     })
                     mqttClientCache[st] = targetMqttClient;
                 }
