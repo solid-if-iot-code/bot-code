@@ -18,7 +18,6 @@ getIri,
 universalAccess, 
 getContainedResourceUrlAll} = require('@inrupt/solid-client');
 const mqtt = require('mqtt');
-const hex = require('string-hex')
 
 const session = new Session();
 
