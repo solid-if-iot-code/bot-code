@@ -51,14 +51,9 @@ session.login({
     // then get all the sensor resources
     let sensorContainerResourceDataset = await getSolidDataset(sensorContainerResourceUri, { fetch: session.fetch });
     let containedSensorResourceUris = getContainedResourceUrlAll(sensorContainerResourceDataset)
-    // do i even need this?
-    let allSensorResourcesCache = [];
-    for (const cSRU of containedSensorResourceUris) {
-        let dataset = await getSolidDataset(cSRU, { fetch: session.fetch })
-        let sensorThings = getThingAll(dataset)
-        allSensorResourcesCache.push(...sensorThings);
-    }
-
+    
+    // initialize mqtt client cache
+    let mqttClientCache = []
     // get subscribedTopics resource
     const subscribedTopicsUri = `${storageUri}public/subscribedTopics`
     const subscribedTopicsDataset = await getSolidDataset(subscribedTopicsUri, { fetch: session.fetch });
@@ -66,26 +61,29 @@ session.login({
     //console.log(subscribedTopicsThings)
     let subscribedTopicsCache = subscribedTopicsThings.map(thing => getStringNoLocale(thing, 'http://www.example.org/identifier#fullTopicString'))
     console.log(subscribedTopicsCache);
-    for (const st of subscribedTopicsCache) {
-        let s = st.split('+');
-        let brokerUri = s[0];
-        console.log(`broker: ${brokerUri}`)
-        let topic = s[1];
-        console.log(`topic: ${topic}`)
-        console.log(mqttClientCache[st])
-        if (mqttClientCache[st]) {
-            
-            mqttClientCache[st].subscribe(topic, {}, (err, packet) => {
-                if (err) console.log(err);
-                console.log(packet)
-            })
-            mqttClientCache[st].on('message', (topic, payload, packet) => {
-                console.log(`received ${topic} with data: ${payload.toString()} or bytes: ${payload.toString().hexEncode().hexDecode()}`)
-            })
+    if (subscribedTopicsCache.length > 0) { 
+        for (const st of subscribedTopicsCache) {
+            let s = st.split('+');
+            let brokerUri = s[0];
+            console.log(`broker: ${brokerUri}`)
+            let topic = s[1];
+            console.log(`topic: ${topic}`)
+            console.log(mqttClientCache[st])
+            if (mqttClientCache[st]) {
+                
+                mqttClientCache[st].subscribe(topic, {}, (err, packet) => {
+                    if (err) console.log(err);
+                    console.log(packet)
+                })
+                mqttClientCache[st].on('message', (topic, payload, packet) => {
+                    console.log(`received ${topic} with data: ${payload.toString()} or bytes: ${payload.toString().hexEncode().hexDecode()}`)
+                })
+            }
         }
-    }
+     }
+   
     // keep track of all the broker uris initiated for each Mqtt Client
-    let mqttClientCache = []
+    
     const sensorContactsSocket = new WebsocketNotification(
         sensorContactsUri,
         { fetch: session.fetch }
